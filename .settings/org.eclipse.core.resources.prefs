@@ -1,0 +1,10 @@
+eclipse.preferences.version=1
+encoding//src/main/java/org/scdc/controller/ExcelController.java=UTF-8
+encoding//src/main/java/org/scdc/controller/ExportController.java=UTF-8
+encoding//src/main/java/org/scdc/controller/LoginController.java=UTF-8
+encoding//src/main/java/org/scdc/mapper/ExportMapper.java=UTF-8
+encoding//src/main/java/org/scdc/service/ExportService.java=UTF-8
+encoding//src/main/java/org/scdc/service/ExportServiceIml.java=UTF-8
+encoding//src/main/java/org/scdc/service/UserServiceImpl.java=UTF-8
+encoding//src/main/webapp/WEB-INF/views/page2.jsp=UTF-8
+encoding//src/test/java/org/scdc/persistence/JDBCTest.java=UTF-8

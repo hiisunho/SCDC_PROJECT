@@ -1,0 +1,474 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper 
+PUBLIC "//mybatis.org/DTD Mapper 3.0//EN" 
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="org.scdc.mapper.ExportMapper">
+
+<!--  1. 요청목록보기 ///////////////////////////////-->	
+	<select id = "getRequestList" resultType="org.scdc.domain.RequestVO">
+		<!-- > 부호를 xml로 인식하지 말라 -->
+		<![CDATA[
+   				select supportNo , partcode,materialprocess, dayschedule, requirement,NVL(stockQuantity,0) stockQuantity
+                        from (select s.supportNo ,s.partcode,s.materialprocess, s.dayschedule, s.requirement
+                                from tbl_support s
+                                LEFT JOIN tbl_process x
+                                ON s.supportno=x.supportno
+                                WHERE x.supportno is NULL
+                                )
+                        LEFT OUTER  JOIN  (
+                                     select partcode code, NVL(wareQuantity,0)-NVL(exportQuantity,0) stockQuantity
+                                                from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+                                                            from tbl_contract c
+                                                            JOIN  purchase_order o on o.contract_num=c.contractno
+                                                            JOIN warehousing w on w.order_num = o.order_num
+                                                        group by c.partcode
+                                            )
+                                                left outer JOIN (
+                                                            select e.partcode code, sum(exportQuantity) exportQuantity
+                                                                from tbl_export e
+                                                                group by e.partcode
+                                                        )
+                                                ON partcode= code
+                                            )
+                                            ON  partcode=code                       
+                                            order by partcode,dayschedule
+		]]>
+	</select>
+	
+<!--  1-1. 요청목록보기 ///////////////////////////////-->	
+	<select id = "getRequestListWithPaging" resultType="org.scdc.domain.RequestVO">
+		<!-- > 부호를 xml로 인식하지 말라 -->
+		<![CDATA[
+   		select supportNo , partcode,materialprocess, dayschedule, requirement,stockQuantity
+			from (select rownum rn, supportNo , partcode,materialprocess, dayschedule, requirement,stockQuantity
+			    from (
+                    select supportNo , partcode,materialprocess, dayschedule, requirement,NVL(stockQuantity,0) stockQuantity
+                        from (select s.supportNo ,s.partcode,s.materialprocess, s.dayschedule, s.requirement
+                                from tbl_support s
+                                LEFT JOIN tbl_process x
+                                ON s.supportno=x.supportno
+                                WHERE x.supportno is NULL
+                                )
+                        LEFT OUTER  JOIN  (
+                                     select partcode code, NVL(wareQuantity,0)-NVL(exportQuantity,0) stockQuantity
+                                                from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+                                                            from tbl_contract c
+                                                            JOIN  purchase_order o on o.contract_num=c.contractno
+                                                            JOIN warehousing w on w.order_num = o.order_num
+                                                        group by c.partcode
+                                            )
+                                                left outer JOIN (
+                                                            select e.partcode code, sum(exportQuantity) exportQuantity
+                                                                from tbl_export e
+                                                                group by e.partcode
+                                                        )
+                                                ON partcode= code
+                                            )
+                                            ON  partcode=code                       
+                                            order by partcode,dayschedule
+                    )
+			    where rownum <=(#{pageNum}*#{amount})	) 
+			where rn >((#{pageNum}-1)*#{amount})
+		]]>
+	</select>
+	
+	
+<!--  2. 재고목록보기  ///////////////////////////////-->	
+	<select id="getStockList" resultType="org.scdc.domain.StockVO" >
+	
+	<![CDATA[ 
+		select partcode, partname,nickname, library, librarym, NVL(wareQuantity,0) wareQuantity, NVL(exportQuantity,0) exportQuantity,(NVL(wareQuantity,0)-NVL(exportQuantity,0)) stockQuantity 
+		    from tbl_part p
+		    LEFT OUTER JOIN (                      
+		        select partcode code, NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity
+		                            from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+		                                        from tbl_contract c
+		                                        JOIN  purchase_order o on o.contract_num=c.contractno
+		                                        JOIN warehousing w on w.order_num = o.order_num
+		                                    group by c.partcode
+		                                )
+		                            FULL outer JOIN (
+		                                        select e.partcode code, sum(exportQuantity) exportQuantity
+		                                            from tbl_export e
+		                                            group by e.partcode
+		                                    )
+		                            ON partcode= code
+		                            )
+		        on p.partcode =code
+		        order by partcode
+        	]]>		
+	</select>
+
+<!--  2-1. 재고목록보기  ///////////////////////////////-->	
+	<select id="getStockListWithPaging" resultType="org.scdc.domain.StockVO" >
+	
+	<![CDATA[ 
+        
+        select partcode, partname,nickname, library, librarym, wareQuantity, exportQuantity,stockQuantity
+			from (select rownum rn, partcode, partname,nickname, library, librarym, wareQuantity, exportQuantity,stockQuantity
+			    from (
+                    select partcode, partname,nickname, library, librarym, wareQuantity, exportQuantity,(wareQuantity-exportQuantity) stockQuantity 
+                        from tbl_part p
+                        LEFT OUTER JOIN (                      
+                            select partcode code, NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity
+                                                from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+                                                            from tbl_contract c
+                                                            JOIN  purchase_order o on o.contract_num=c.contractno
+                                                            JOIN warehousing w on w.order_num = o.order_num
+                                                        group by c.partcode
+                                            )
+                                                left outer JOIN (
+                                                            select e.partcode code, sum(exportQuantity) exportQuantity
+                                                                from tbl_export e
+                                                                group by e.partcode
+                                                        )
+                                                ON partcode= code
+                                                )
+                            on p.partcode =code
+                            order by partcode                   
+                    )
+			    where rownum <=(#{pageNum}*#{amount})	) 
+			where rn >((#{pageNum}-1)*#{amount})
+        	]]>		
+	</select>
+	
+	<!--   3. 출고현황페이지 목록가져오기///////////////////////////////-->
+   <select id = "getExportState" resultType="org.scdc.domain.ExportStateVO">
+   <![CDATA[ 
+       select  * from  tbl_process
+      	]]>	
+   </select>
+   
+   	<!--   3-1. 출고현황페이지 목록가져오기///////////////////////////////-->
+   <select id = "getExportStateWithPaging" resultType="org.scdc.domain.ExportStateVO">
+   <![CDATA[
+       select supportNo, partCode, materialProcess,daySchedule,requirement,stockQuantity,confirm,export_date
+			from (select rownum rn, supportNo, partCode, materialProcess,daySchedule,requirement,stockQuantity,confirm,export_date
+			    from (select  * from  tbl_process)
+			    where rownum <=(#{pageNum}*#{amount})	) 
+			where rn >((#{pageNum}-1)*#{amount})
+      	]]>	
+   </select>
+   
+   <!-- 4. 재고있는  품목  가격  리스트 -->
+	<select id = "getReportList" resultType="org.scdc.domain.ReportVO">
+		<!-- > 부호를 xml로 인식하지 말라 -->
+		<![CDATA[
+select partcode, partname,nickname, library,librarym,unitprice,NVL(wareQuantity,0),NVL(exportQuantity,0),stockQuantity,stockQuantity*unitprice totalPrice
+    from tbl_part p
+        LEFT OUTER JOIN (
+            select c.partcode code,c.UNITPRICE unitprice , wareQuantity,exportQuantity, NVL(wareQuantity,0)-NVL(exportQuantity,0) stockQuantity
+                from tbl_contract c
+                LEFT OUTER JOIN (
+                                select partcode part, NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity
+                                        from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+                                                    from tbl_contract c
+                                                    JOIN  purchase_order o on o.contract_num=c.contractno
+                                                    JOIN warehousing w on w.order_num = o.order_num
+                                                group by c.partcode
+                                            )
+                                        FULL outer JOIN (
+                                                    select e.partcode code, sum(exportQuantity) exportQuantity
+                                                        from tbl_export e
+                                                        group by e.partcode
+                                                )
+                                        ON partcode= code
+                                        )
+                    ON c.partcode =part
+            )
+         ON p.partcode=code
+		]]>
+	</select>
+	  <!-- 4-1. 재고있는  품목  가격  리스트 -->
+		<select id = "getReportListWithPaging" resultType="org.scdc.domain.ReportVO">
+		<!-- > 부호를 xml로 인식하지 말라 -->
+		<![CDATA[
+				select partcode, partname,nickName, library,librarym,unitprice,stockQuantity,totalPrice
+							from (select rownum rn, partcode, partname,nickName, library,librarym,unitprice,stockQuantity,totalPrice
+							    from (
+				                     select partcode, partname,nickName, library,librarym,unitprice,NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) wareQuantity,stockQuantity,stockQuantity*unitprice totalPrice
+				                        from tbl_part p
+				                            LEFT OUTER JOIN (
+				                                select c.partcode code,c.UNITPRICE unitprice , wareQuantity,exportQuantity, NVL(wareQuantity,0)-NVL(exportQuantity,0) stockQuantity
+				                                    from tbl_contract c
+				                                    LEFT OUTER JOIN (
+				                                                    select partcode part, NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity
+				                                                            from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+				                                                                        from tbl_contract c
+				                                                                        JOIN  purchase_order o on o.contract_num=c.contractno
+				                                                                        JOIN warehousing w on w.order_num = o.order_num
+				                                                                    group by c.partcode
+				                                                                )
+				                                                            FULL outer JOIN (
+				                                                                        select e.partcode code, sum(exportQuantity) exportQuantity
+				                                                                            from tbl_export e
+				                                                                            group by e.partcode
+				                                                                    )
+				                                                            ON partcode= code
+				                                                            )
+				                                        ON c.partcode =part
+				                                )
+				                             ON p.partcode=code                   
+				                    )
+							    where rownum <=(#{pageNum}*#{amount})	) 
+							where rn >((#{pageNum}-1)*#{amount})
+		]]>
+	</select>
+	
+<!--5. 출고요청 -> 출고  -->
+	
+	<select id="getExport" resultType="org.scdc.domain.RequestVO" >
+	select s.supportNo, s.partcode,s.materialprocess, s.dayschedule, requirement, nvl(stockQuantity,0) stockQuantity
+    from tbl_support s
+    LEFT OUTER  JOIN  (
+                 select partcode code, NVL(wareQuantity,0)-NVL(exportQuantity,0) stockQuantity
+                            from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+                                        from tbl_contract c
+                                        JOIN  purchase_order o on o.contract_num=c.contractno
+                                        JOIN warehousing w on w.order_num = o.order_num
+                                    group by c.partcode
+                        )
+                            left outer JOIN (
+                                        select e.partcode code, sum(exportQuantity) exportQuantity
+                                            from tbl_export e
+                                            group by e.partcode
+                                    )
+                            ON partcode= code
+                        )
+                        ON  s.partcode=code
+                        
+			where s.supportNo=#{supportNo}
+			order by s.dayschedule
+		
+	</select>
+	
+		<!--6.  출고 현황 (출고요청시 업데이트-출고대기)    -->	
+		   <!-- 등록일  경우 리턴이 int이면 처리된 글의 개수가 반납된다. ->insert -->
+	<insert id="insertStatus">
+		insert into tbl_process(req_seq,supportNo,materialProcess,daySchedule,partCode,requirement,stockQuantity) 
+   			values(req_seq.nextval,#{supportNo},#{materialProcess},#{daySchedule},#{partCode},#{requirement},#{stockQuantity})
+	</insert>
+
+
+   
+   <!--  7. 출고///////////////////////////////-->
+
+	
+	<insert id="insertExport">
+   		insert into tbl_export(export_no,exportQuantity,partCode) 
+   			values(export_seq.nextval,#{exportQuantity},#{partCode})
+
+	</insert>
+   
+   <!-- 8. 출고후 출고상태,날짜 업데이트 -->    
+	<update id ="registerProcess">
+		update tbl_process set confirm=1, 
+    	export_date=sysdate where partCode =#{partCode}
+    </update>
+    
+    <!-- 9. 총글 개수 -->	
+	<select id="sumPrice" resultType="int">
+	<![CDATA[
+		select sum(totalPrice) from(
+            select partcode, partname,nickname, library,librarym,NVL(unitprice,0) unitPrice,NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity,NVL(stockQuantity,0) stockQuantity,NVL(stockQuantity*unitprice,0) totalPrice
+                                        from tbl_part p
+                                            LEFT OUTER JOIN (
+                                                select c.partcode code,c.UNITPRICE unitprice , wareQuantity,exportQuantity, NVL(wareQuantity,0)-NVL(exportQuantity,0) stockQuantity
+                                                    from tbl_contract c
+                                                    LEFT OUTER JOIN (
+                                                                    select partcode part, NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity
+                                                                            from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+                                                                                        from tbl_contract c
+                                                                                        JOIN  purchase_order o on o.contract_num=c.contractno
+                                                                                        JOIN warehousing w on w.order_num = o.order_num
+                                                                                    group by c.partcode
+                                                                                )
+                                                                            FULL outer JOIN (
+                                                                                        select e.partcode code, sum(exportQuantity) exportQuantity
+                                                                                            from tbl_export e
+                                                                                            group by e.partcode
+                                                                                    )
+                                                                            ON partcode= code
+                                                                            )
+                                                        ON c.partcode =part
+                                                )
+                                             ON p.partcode=code)
+            ]]>
+	</select>
+    
+<!-- 10. 총글 개수 -->	
+	<select id="count" resultType="int">
+	<![CDATA[
+select count(*) from(
+            select partcode, partname,nickname, library,librarym,NVL(unitprice,0) unitPrice,NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity,NVL(stockQuantity,0) stockQuantity,NVL(stockQuantity*unitprice,0) totalPrice
+                                        from tbl_part p
+                                            LEFT OUTER JOIN (
+                                                select c.partcode code,c.UNITPRICE unitprice , wareQuantity,exportQuantity, NVL(wareQuantity,0)-NVL(exportQuantity,0) stockQuantity
+                                                    from tbl_contract c
+                                                    LEFT OUTER JOIN (
+                                                                    select partcode part, NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity
+                                                                            from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+                                                                                        from tbl_contract c
+                                                                                        JOIN  purchase_order o on o.contract_num=c.contractno
+                                                                                        JOIN warehousing w on w.order_num = o.order_num
+                                                                                    group by c.partcode
+                                                                                )
+                                                                            FULL outer JOIN (
+                                                                                        select e.partcode code, sum(exportQuantity) exportQuantity
+                                                                                            from tbl_export e
+                                                                                            group by e.partcode
+                                                                                    )
+                                                                            ON partcode= code
+                                                                            )
+                                                        ON c.partcode =part
+                                                )
+                                             ON p.partcode=code)
+            ]]>
+	</select>
+	    
+	    
+	<!-- 대분류 가져오기 -->
+	<select id="getLibrary" resultType="org.scdc.domain.StockVO">
+		select distinct library from tbl_part order by library
+	</select>
+	
+	<!-- 대분류별 목록가져오기 -->
+	<select id="getSelectedList" resultType="org.scdc.domain.StockVO">
+        select partcode, partname,nickname, library, librarym, wareQuantity, exportQuantity,stockQuantity
+			from (select rownum rn, partcode, partname,nickname, library, librarym, wareQuantity, exportQuantity,stockQuantity
+			    from (
+                    select partcode, partname,nickname, library, librarym, wareQuantity, exportQuantity,(wareQuantity-exportQuantity) stockQuantity 
+                        from tbl_part p
+                        LEFT OUTER JOIN (                      
+                            select partcode code, NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity
+                                                from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+                                                            from tbl_contract c
+                                                            JOIN  purchase_order o on o.contract_num=c.contractno
+                                                            JOIN warehousing w on w.order_num = o.order_num
+                                                        group by c.partcode
+                                            )
+                                                left outer JOIN (
+                                                            select e.partcode code, sum(exportQuantity) exportQuantity
+                                                                from tbl_export e
+                                                                group by e.partcode
+                                                        )
+                                                ON partcode= code
+                                                )
+                            on p.partcode =code
+                            order by partcode                   
+                    )) where library=#{libraryLists}
+	</select>
+	
+	<!-- 대분류별 리포트목록 가져오기 -->
+	<select id="getSelectedReportList" resultType="org.scdc.domain.ReportVO">
+		select partcode, partname,nickname,library,libraryM,unitprice,NVL(wareQuantity,0),NVL(exportQuantity,0),stockQuantity,stockQuantity*unitprice totalPrice
+		   	from tbl_part p
+		        LEFT OUTER JOIN (
+		            select c.partcode code,c.UNITPRICE unitprice , wareQuantity,exportQuantity, NVL(wareQuantity,0)-NVL(exportQuantity,0) stockQuantity
+		                from tbl_contract c
+		                LEFT OUTER JOIN (
+		                                select partcode part, NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity
+		                                        from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+		                                                    from tbl_contract c
+		                                                    JOIN  purchase_order o on o.contract_num=c.contractno
+		                                                    JOIN warehousing w on w.order_num = o.order_num
+		                                                group by c.partcode
+		                                            )
+		                                        FULL outer JOIN (
+		                                                    select e.partcode code, sum(exportQuantity) exportQuantity
+		                                                        from tbl_export e
+		                                                        group by e.partcode
+		                                                )
+		                                        ON partcode= code
+		                                        )
+		                    ON c.partcode =part
+		            )
+		         ON p.partcode=code where library=#{libraryLists}
+	</select>
+	
+
+
+	<!-- 엑셀만들기 -->
+	
+	<select id="makeExcel" resultType="org.scdc.domain.StockVO">
+	        select partcode, partname,nickname, library, librarym, wareQuantity, exportQuantity,stockQuantity
+			from (select rownum rn, partcode, partname,nickname, library, librarym, wareQuantity, exportQuantity,stockQuantity
+			    from (
+                    select partcode, partname,nickname, library, librarym, wareQuantity, exportQuantity,(wareQuantity-exportQuantity) stockQuantity 
+                        from tbl_part p
+                        LEFT OUTER JOIN (                      
+                            select partcode code, NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity
+                                                from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+                                                            from tbl_contract c
+                                                            JOIN  purchase_order o on o.contract_num=c.contractno
+                                                            JOIN warehousing w on w.order_num = o.order_num
+                                                        group by c.partcode
+                                            )
+                                                left outer JOIN (
+                                                            select e.partcode code, sum(exportQuantity) exportQuantity
+                                                                from tbl_export e
+                                                                group by e.partcode
+                                                        )
+                                                ON partcode= code
+                                                )
+                            on p.partcode =code
+                            order by partcode                   
+                    ))
+	</select>
+	
+	<!-- 리포트 엑셀만들기 -->
+	
+	<select id="makeReportExcel" resultType="org.scdc.domain.ReportVO">
+		  select partcode, partname,unitprice,NVL(wareQuantity,0),NVL(exportQuantity,0),stockQuantity,stockQuantity*unitprice totalPrice
+		   	from tbl_part p
+		        LEFT OUTER JOIN (
+		            select c.partcode code,c.UNITPRICE unitprice , wareQuantity,exportQuantity, NVL(wareQuantity,0)-NVL(exportQuantity,0) stockQuantity
+		                from tbl_contract c
+		                LEFT OUTER JOIN (
+		                                select partcode part, NVL(wareQuantity,0) wareQuantity,NVL(exportQuantity,0) exportQuantity
+		                                        from ( select c.partcode partcode, sum(ware_quantity) wareQuantity
+		                                                    from tbl_contract c
+		                                                    JOIN  purchase_order o on o.contract_num=c.contractno
+		                                                    JOIN warehousing w on w.order_num = o.order_num
+		                                                group by c.partcode
+		                                            )
+		                                        FULL outer JOIN (
+		                                                    select e.partcode code, sum(exportQuantity) exportQuantity
+		                                                        from tbl_export e
+		                                                        group by e.partcode
+		                                                )
+		                                        ON partcode= code
+		                                        )
+		                    ON c.partcode =part
+		            )
+		         ON p.partcode=code
+	</select>
+	    
+
+
+
+<!-- 쓸모없는  코드 -->
+
+<!--  1-1. 품목목록보기///////////////////////////////-->
+	<select id = "getList" resultType="org.scdc.domain.PartVO">
+		<!-- > 부호를 xml로 인식하지 말라 -->
+		<![CDATA[
+			select * from tbl_part
+		]]>
+	</select>
+	
+<!--  1-1-1. 품목목록보기 with page ///////////////////////////////-->	
+	<select id="getListWithPaging" resultType="org.scdc.domain.PartVO" >
+	
+		<![CDATA[
+			select partCode, partName, nickName, library, drw_No, drw_Img, common, remark
+			from (select rownum rn, partCode, partName, nickName, library, drw_No, drw_Img, common, remark
+			    from (select * from tbl_Part)
+			    where rownum <=(#{pageNum}*#{amount})	) 
+			where rn >((#{pageNum}-1)*#{amount})
+		]]>
+	
+	</select>
+	
+</mapper>
